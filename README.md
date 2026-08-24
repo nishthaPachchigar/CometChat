@@ -137,7 +137,17 @@ A 2-4 minute demonstration showing the agent in action. The demo should include:
 
 5. **Evaluation suite running**: Terminal output of `npm run eval` showing per-case results broken down by category.
 
-<!-- Demo GIF will be embedded here -->
-<p align="center">
-  <img src="https://s8.ezgif.com/tmp/ezgif-85572db4957be49c.gif" alt="Demo GIF" width="700" />
-</p>
+## Demo
+
+This project implements an AI support agent with the following capabilities demonstrated in the evaluation:
+
+- **Knowledge-base questions**: Agent returns policy answers with citations from source documents
+- **Order lookup**: Agent queries order status using the order lookup tool with proper privacy sanitization
+- **Multi-turn conversation**: Agent maintains context across consecutive user messages
+- **Privacy protection**: Agent refuses to disclose internal notes, risk scores, or customer data
+- **Evaluation results**: Per-case results broken down by category (retrieval, groundedness, tool use, privacy, multi-turn)
+
+> **To add your demo recording**: 
+> 1. Upload `Screen Recording 2026-08-24 235040.mp4` to the repo root folder  
+> 2. The video will automatically display on GitHub  
+> 3. Or replace this section with your own embedded GIF/Video markdown
