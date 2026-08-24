@@ -139,5 +139,5 @@ A 2-4 minute demonstration showing the agent in action. The demo should include:
 
 <!-- Demo GIF will be embedded here -->
 <p align="center">
-  <img src="https://s8.ezgif.com/tmp/ezgif-85572db4957be49c.gif" alt="Demo GIF" width="500" />
+  <img src="https://s8.ezgif.com/tmp/ezgif-85572db4957be49c.gif" alt="Demo GIF" width="700" />
 </p>
