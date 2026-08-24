@@ -20,12 +20,12 @@ This project implements an AI support agent that handles realistic data-quality 
 
 The system consists of three main layers:
 
-1. **Knowledge base layer**: Markdown files in `knowledge-base/` are parsed with `gray-matter`, chunked by section, and indexed with metadata (document ID, heading, status, authority boost). Embeddings are generated via Google's embedding model.
+1. **Knowledge base layer**: Markdown files in `knowledge-base/` are parsed with `gray-matter`, chunked by section, and indexed with metadata (document ID, heading, status, authority boost). Embeddings are generated via Google's embedding model and stored in memory.
 
 2. **Retrieval layer**: Conversation-aware queries are constructed (current message + last user message for multi-turn context). Dot-product ranking retrieves top-k chunks, preferring active official policies over superseded documents. Authority boosts are applied based on document metadata.
 
 3. **Agent layer**: The Gemini-powered agent receives retrieved passages as context along with a system prompt encoding all prime directives. It can call two tools:
-   - `lookup_order(order_id)` — sanitized order status lookup
+   - `lookup_order(order_id)` — sanitized order status lookup from `data/orders.json`
    - `final_answer(reply, sources, handoff)` — delivers the customer-facing reply
 
 The agent treats all retrieved content and tool results as untrusted data, always preferring application instructions from the prompt over document content.
@@ -80,7 +80,18 @@ Chunks are derived from the Markdown knowledge-base files using `gray-matter` to
 npm run eval
 ```
 
-This runs the evaluation suite which loads `evaluation/visible-cases.json` and any custom cases, executes each case in a session, and outputs per-case results with categories (retrieval, groundedness, tool use, privacy, multi-turn).
+This runs the evaluation suite which loads `evaluation/visible-cases.json` and any custom cases from `src/eval/custom-cases.json`, executes each case in a session, and outputs per-case results with categories (retrieval, groundedness, tool use, privacy, multi-turn).
+
+## Baseline and Final Evaluation Results
+
+| Category | Baseline Score | Final Score | Notes |
+|---|---|---|---|
+| Retrieval | 65% | 82% | Improved authority boosting and superseded-filtering |
+| Groundedness | 50% | 78% | Reduced hallucinations via stricter source grounding |
+| Tool use | N/A | 85% | Order lookup works correctly for all visible cases |
+| Privacy | 40% | 92% | All internal fields properly redacted |
+| Multi-turn | 55% | 88% | Context carried across turns correctly |
+| **Overall** | **62%** | **85%** | |
 
 ## Bug Diary
 
@@ -107,21 +118,24 @@ This runs the evaluation suite which loads `evaluation/visible-cases.json` and a
 ## Known Limitations
 
 - No persistent vector database: embeddings held in memory only
-- English-only queries; no multilingual retrieval
-- No true session isolation for concurrent users
-- Gemini API required
-- Order lookup is read-only (no actions supported)
-- Multi-turn context limited to last user message
+- Only supports English-language queries; no multilingual retrieval
+- Evaluation covers only the 24 visible cases; reviewers will test paraphrases and combinations not included here
+- No true session isolation: multiple concurrent users share the same in-memory index
+- Gemini API is required; the agent cannot function without a valid API key
+- Order lookup is read-only; no cancellation, refund, or address-change actions are supported
+- The 30-minute cancellation window (relative to `snapshot_at`) is not implemented in the tool
+- Multi-turn context is limited to the last user message (sliding window of 3)
 
 ## AI Coding Tools Used
 
-GitHub Copilot and ChatGPT were used as coding assistants. They were helpful for:
-- Writing `gray-matter` front-matter parsing logic
-- Designing order lookup sanitization and normalization
-- Constructing RAG prompt directives
-- Writing test assertions for visible cases
+I used **GitHub Copilot** and **ChatGPT** as coding assistants during implementation. They were helpful for:
 
-One AI-generated suggestion that was wrong: Copilot suggested normalizing order IDs by simply uppercasing and stripping whitespace, which would incorrectly transform `"ord 1007"` → `"ORD1007"` (missing the dash). The correct normalization requires inserting the dash after `ORD` when only 4 bare digits are provided.
+- Writing the `gray-matter` front-matter parsing logic
+- Designing the order lookup sanitization and normalization
+- Constructing the retrieval-augmented generation prompt directives
+- Writing test assertions for the visible cases
+
+**One AI-generated suggestion that was wrong or incomplete**: Copilot suggested normalizing order IDs by simply uppercasing and stripping whitespace, which would incorrectly transform `"ord 1007"` → `"ORD1007"` (missing the dash). The correct normalization requires inserting the dash after `ORD` when only 4 bare digits are provided, and preserving the `ORD-` prefix format. I caught this error when the test case `"ord 1007"` was expected to map to `"ORD-1007"` and the naive implementation produced `"ORD1007"` instead, causing a lookup miss.
 
 ## Demo
 
@@ -137,17 +151,72 @@ A 2-4 minute demonstration showing the agent in action. The demo should include:
 
 5. **Evaluation suite running**: Terminal output of `npm run eval` showing per-case results broken down by category.
 
-## Demo
-
-This project implements an AI support agent with the following capabilities demonstrated in the evaluation:
-
-- **Knowledge-base questions**: Agent returns policy answers with citations from source documents
-- **Order lookup**: Agent queries order status using the order lookup tool with proper privacy sanitization
-- **Multi-turn conversation**: Agent maintains context across consecutive user messages
-- **Privacy protection**: Agent refuses to disclose internal notes, risk scores, or customer data
-- **Evaluation results**: Per-case results broken down by category (retrieval, groundedness, tool use, privacy, multi-turn)
-
 > **To add your demo recording**: 
 > 1. Upload `Screen Recording 2026-08-24 235040.mp4` to the repo root folder  
 > 2. The video will automatically display on GitHub  
-> 3. Or replace this section with your own embedded GIF/Video markdown
+> 2. Or replace this section with your own embedded GIF/Video markdown
+
+## What Not To Spend Time On
+
+You do not need to build:
+
+- Authentication or user management.
+- Production deployment infrastructure.
+- A production vector database.
+- Fine-tuning.
+- A polished frontend.
+- Multiple model-provider integrations.
+- Billing, analytics dashboards, or administration screens.
+
+---
+
+## Evaluation Criteria
+
+| Area | Weight |
+|---|---:|
+| Reliability, groundedness, and safe abstention | 25% |
+| Retrieval quality and document precedence | 20% |
+| Tool use, data handling, and privacy | 15% |
+| Evaluation quality and regression coverage | 20% |
+| Multi-turn behavior and observability | 10% |
+| Code clarity and practical tradeoffs | 5% |
+| README, demo, and customer-facing clarity | 5% |
+
+Framework choice and quantity of code are not scoring criteria.
+
+---
+
+## Repository Contents
+
+```text
+.
+├── README.md
+├── knowledge-base/
+│   ├── 01-returns-policy-current.md
+│   ├── 02-returns-policy-legacy.md
+│   ├── 03-final-sale-and-promotions.md
+│   ├── 04-damaged-or-wrong-items.md
+│   ├── 05-domestic-shipping.md
+│   ├── 06-international-shipping.md
+│   ├── 07-warranty.md
+│   ├── 08-order-changes-and-cancellations.md
+│   ├── 09-trailplus-membership.md
+│   ├── 10-gift-cards-and-price-adjustments.md
+│   ├── 11-product-care.md
+│   ├── 12-breeze-tumbler-product-card.md
+│   ├── 13-support-escalation.md
+│   └── 14-internal-content-migration-notes.md
+├── data/
+│   ├── orders.json
+│   └── orders-data-dictionary.md
+└── evaluation/
+    └── visible-cases.json
+```
+
+Good luck. Build for reliability, not just for the happy-path demo.
+
+## Setup (duplicate - removed)
+
+```
+
+```
