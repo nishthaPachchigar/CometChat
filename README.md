@@ -151,10 +151,16 @@ A 2-4 minute demonstration showing the agent in action. The demo should include:
 
 5. **Evaluation suite running**: Terminal output of `npm run eval` showing per-case results broken down by category.
 
-> **To add your demo recording**: 
-> 1. Upload `Screen Recording 2026-08-24 235040.mp4` to the repo root folder  
-> 2. The video will automatically display on GitHub  
-> 2. Or replace this section with your own embedded GIF/Video markdown
+<!-- Demo video embedded from repo file -->
+<p align="center">
+  <a href="Screen%20Recording%202026-08-24%20235040.mp4">
+    <img src="https://s8.ezgif.com/tmp/ezgif-85572db4957be49c.gif" alt="Demo GIF placeholder" width="500" />
+  </a>
+</p>
+
+_Recording: `Screen Recording 2026-08-24 235040.mp4` — available in the repository root._
+
+> **Note**: GitHub supports inline MP4 playback in README. The video thumbnail above links to the MP4 file. When viewed on GitHub, clicking the image will play the video, or you can directly click the filename `Screen Recording 2026-08-24 235040.mp4` to download/ view it.
 
 ## What Not To Spend Time On
 
