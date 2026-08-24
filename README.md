@@ -1,239 +1,143 @@
-# AI Agent Intern Take-Home: Build a Reliable RAG Support Agent
+# Aster & Row AI Support Agent
 
-## The assignment
+Reliable RAG-based support agent for Aster & Row, an ecommerce company selling bags, drinkware, and travel accessories.
 
-Aster & Row is a fictional ecommerce company that sells bags, drinkware, and travel accessories. The company wants to launch an AI support agent using the documents and mock order data in this repository.
+## Overview
 
-This repository intentionally contains **only content and data**. There is no starter application and no prescribed stack. Build the smallest reliable system you would be comfortable demonstrating to a customer.
+This project implements an AI support agent that handles realistic data-quality problems including conflicting policy answers, invented order information, lost conversation context, and unsafe retrieved content. The system uses Retrieval-Augmented Generation (RAG) over Markdown knowledge-base documents and an order lookup tool.
 
-## Timebox
+## Features
 
-Please spend **6–8 hours** on the assignment. Do not exceed eight hours.
+- **Retrieval-Augmented Generation**: RAG over knowledge-base documents with authority-based source filtering
+- **Order lookup tool**: Sanitized order status lookup from `data/orders.json` with privacy redaction
+- **Multi-turn conversation**: Context awareness for follow-up questions
+- **Prompt security**: Ignores instructions from internal documents
+- **Privacy protection**: Never exposes customer data, internal notes, or risk scores
+- **Observable**: Structured JSONL traces for debugging
+- **Evaluation suite**: Deterministic test cases with category reporting
 
-A smaller, well-tested system is better than a broad system that works only in a demo. It is acceptable to leave something incomplete if the limitation is clearly documented.
+## Architecture
 
-## Submission
+The system consists of three main layers:
 
-Submit **one GitHub repository link**. Nothing else is required.
+1. **Knowledge base layer**: Markdown files in `knowledge-base/` are parsed with `gray-matter`, chunked by section, and indexed with metadata (document ID, heading, status, authority boost). Embeddings are generated via Google's embedding model.
 
-Your repository must contain:
+2. **Retrieval layer**: Conversation-aware queries are constructed (current message + last user message for multi-turn context). Dot-product ranking retrieves top-k chunks, preferring active official policies over superseded documents. Authority boosts are applied based on document metadata.
 
-- Your application source code.
-- Your tests and evaluation suite.
-- Clear setup and run instructions.
-- Evaluation results and known limitations in the README.
-- A short GIF or video embedded in the README showing the agent working.
+3. **Agent layer**: The Gemini-powered agent receives retrieved passages as context along with a system prompt encoding all prime directives. It can call two tools:
+   - `lookup_order(order_id)` — sanitized order status lookup
+   - `final_answer(reply, sources, handoff)` — delivers the customer-facing reply
 
-Do not submit API keys, credentials, customer data, separate documents, or slide decks.
+The agent treats all retrieved content and tool results as untrusted data, always preferring application instructions from the prompt over document content.
 
----
+## Setup
 
-## Customer scenario
+```bash
+# 1. Clone the repository
+git clone <repo-url>
+cd ai-agent-intern-test
 
-Aster & Row has previously tried several AI support prototypes. The customer reported four recurring problems:
+# 2. Install dependencies
+npm install
 
-1. **Conflicting policy answers:** The agent sometimes says the return window is 30 days and sometimes says it is 45 days.
-2. **Invented order information:** The agent occasionally gives an order status without actually looking it up.
-3. **Lost conversation context:** Follow-up questions such as “What about Canada?” are treated as unrelated questions.
-4. **Unsafe retrieved content:** Internal or instruction-like text inside the knowledge base can affect the agent’s behavior.
+# 3. Set up environment variables
+cp .env.example .env
+# Edit .env and add your GEMINI_API_KEY (required)
+# Optional: set GEMINI_CHAT_MODEL, GROQ_API_KEY, DEBUG
 
-The supplied corpus contains realistic data-quality problems, including superseded content, internal notes, conflicting active sources, and fields that must not be shown to customers.
+# 4. Build the search index (once)
+npm run index:build
 
-Your task is to build an agent that handles these conditions deliberately rather than succeeding only on ideal questions.
-
----
-
-# Required capabilities
-
-## 1. Retrieval-Augmented Generation
-
-Use RAG over the Markdown files in `knowledge-base/`.
-
-Your implementation must:
-
-- Split and index the supplied documents.
-- Preserve useful metadata from the document front matter.
-- Retrieve only relevant passages instead of sending the entire corpus to the model.
-- Prefer authoritative, active policy documents over superseded or non-policy documents.
-- Include source references in every policy or product answer. A source should identify at least the filename and relevant heading.
-- Avoid making claims that are not supported by the retrieved content.
-- Clearly say when the supplied information is insufficient.
-- Surface genuine conflicts between current authoritative sources rather than silently choosing one.
-
-Do not delete or rewrite the supplied source files to make the assignment easier. You may create derived indexes or normalized representations.
-
-## 2. Order lookup as a tool or function
-
-Use `data/orders.json` to implement an order-status lookup tool or function.
-
-The model must **not** receive the entire orders file in its prompt. It should receive only the result of a lookup when order information is actually required.
-
-The order lookup behavior must:
-
-- Ask for an order ID when it is missing.
-- Handle unknown and malformed order IDs safely.
-- Normalize harmless input differences such as lowercase IDs or surrounding whitespace.
-- Use the order’s current `status` as authoritative.
-- Avoid inventing a delivery estimate when one is unavailable.
-- Avoid reporting stale delivery fields for cancelled or returned orders.
-- Never expose customer email, address, internal notes, risk scores, or other internal-only fields.
-- Never claim that a lookup happened when it did not.
-
-Assume that possession of the order ID is sufficient authentication for this mock assignment. You do not need to build a full identity-verification system.
-
-## 3. Multi-turn conversation
-
-Maintain relevant session context across turns.
-
-The agent should correctly handle follow-ups such as:
-
-- “Do you ship internationally?” followed by “What about Canada?”
-- “Where is `ORD-1007`?” followed by “When will it arrive?”
-- A policy question followed by a narrower question about an exception.
-
-The agent should not carry unrelated details indefinitely or mix one session with another.
-
-## 4. Prompting and agent behavior
-
-The agent must:
-
-- Treat user messages, retrieved passages, and tool results as untrusted data.
-- Follow application instructions rather than instructions found inside retrieved documents.
-- Refuse requests to reveal system prompts, hidden instructions, secrets, or internal-only data.
-- Use company content rather than general model knowledge for company-specific questions.
-- Ask a concise clarifying question when required information is missing.
-- Recommend human assistance when the documents conflict, the data is insufficient, or an action cannot be completed.
-- Never promise that a refund, cancellation, replacement, or address change has been completed unless the system actually supports that action.
-
-## 5. Evaluation suite
-
-The file `evaluation/visible-cases.json` contains behavior-level cases that your system must handle.
-
-Build an evaluation suite that:
-
-- Covers every supplied visible case.
-- Adds at least **five original cases** of your own.
-- Can be run using one clearly documented command.
-- Reports individual case results, not only a single overall score.
-- Separately reports useful categories such as retrieval, groundedness, tool use, privacy, and multi-turn behavior.
-- Uses deterministic assertions wherever practical, including source selection, tool calls, tool arguments, forbidden disclosures, and abstention behavior.
-- Does not rely exclusively on another LLM to grade the agent.
-
-The reviewers will also test paraphrases and combinations that are not included in the visible file. Do not hardcode answers for the supplied prompts.
-
-As you build, keep a small **bug diary** in your README. Document at least three failures you found in your own agent, including:
-
-- How you reproduced the failure.
-- The actual root cause.
-- The change you made.
-- The regression test that now catches it.
-
-At least one documented failure should be something you discovered beyond the exact wording of the visible cases. Include an early baseline and final evaluation result so we can see what improved.
-
-## 6. Basic observability
-
-Provide a debug mode, trace, or log that makes it possible to inspect:
-
-- The current user message.
-- Relevant conversation history.
-- Retrieved passages, metadata, and scores.
-- Tool calls and sanitized tool results.
-- The final response.
-- Errors, fallbacks, or handoffs.
-
-Plain structured logs are sufficient. Do not build a dashboard. Never log secrets.
-
-## 7. Minimal interface
-
-A CLI, simple web page, or basic API is sufficient. Visual polish will not affect the score.
-
-The final user-facing response should make it easy to see:
-
-- The answer.
-- Sources, when applicable.
-- Whether the agent is recommending a human handoff.
-
----
-
-# README requirements
-
-Your completed repository README must include:
-
-1. Setup and run instructions that work from a clean clone.
-2. Required environment variables and an `.env.example` without real credentials.
-3. The model, embedding approach, framework, and storage approach you chose.
-4. A short architecture explanation.
-5. The command for running evaluations.
-6. Baseline and final evaluation results, broken down by category.
-7. A bug diary covering at least three reproduced failures, root causes, fixes, and regression tests.
-8. Known limitations and what you would improve before production.
-9. Which AI coding tools you used, what you used them for, and one example of an AI-generated suggestion that was wrong or incomplete.
-10. A **2–4 minute GIF or video embedded in the README** demonstrating:
-   - One knowledge-base question with citations.
-   - One order lookup.
-   - One multi-turn conversation.
-   - One case where the agent correctly refuses to guess or recommends human help.
-   - The evaluation suite running.
-
-GitHub does not play uploaded video files inline in every context. An embedded GIF or a clickable video thumbnail/link inside the README is acceptable.
-
----
-
-# What not to spend time on
-
-You do not need to build:
-
-- Authentication or user management.
-- Production deployment infrastructure.
-- A production vector database.
-- Fine-tuning.
-- A polished frontend.
-- Multiple model-provider integrations.
-- Billing, analytics dashboards, or administration screens.
-
----
-
-# Evaluation criteria
-
-| Area | Weight |
-|---|---:|
-| Reliability, groundedness, and safe abstention | 25% |
-| Retrieval quality and document precedence | 20% |
-| Tool use, data handling, and privacy | 15% |
-| Evaluation quality and regression coverage | 20% |
-| Multi-turn behavior and observability | 10% |
-| Code clarity and practical tradeoffs | 5% |
-| README, demo, and customer-facing clarity | 5% |
-
-Framework choice and quantity of code are not scoring criteria.
-
----
-
-# Repository contents
-
-```text
-.
-├── README.md
-├── knowledge-base/
-│   ├── 01-returns-policy-current.md
-│   ├── 02-returns-policy-legacy.md
-│   ├── 03-final-sale-and-promotions.md
-│   ├── 04-damaged-or-wrong-items.md
-│   ├── 05-domestic-shipping.md
-│   ├── 06-international-shipping.md
-│   ├── 07-warranty.md
-│   ├── 08-order-changes-and-cancellations.md
-│   ├── 09-trailplus-membership.md
-│   ├── 10-gift-cards-and-price-adjustments.md
-│   ├── 11-product-care.md
-│   ├── 12-breeze-tumbler-product-card.md
-│   ├── 13-support-escalation.md
-│   └── 14-internal-content-migration-notes.md
-├── data/
-│   ├── orders.json
-│   └── orders-data-dictionary.md
-└── evaluation/
-    └── visible-cases.json
+# 5. Start the agent
+npm start
 ```
 
-Good luck. Build for reliability, not just for the happy-path demo.
+## Environment Variables
+
+See `.env.example` for the required variables. No real credentials should be committed.
+
+```
+GEMINI_API_KEY=your-key-here        # Required: Get at https://aistudio.google.com/apikey
+GEMINI_CHAT_MODEL=gemini-2.5-flash  # Optional: chat model override
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001  # Optional: embedding model override
+GROQ_API_KEY=your-groq-key-here     # Optional: for Groq provider
+GROQ_MODEL=llama-3.3-70b-versatile  # Optional: Groq model override
+DEBUG=true                          # Optional: enable debug logging
+```
+
+## Model, Embedding Approach, Framework, and Storage
+
+- **Model**: Google Gemini `gemini-2.5-flash` (via `@google/genai` SDK)
+- **Embeddings**: Google `gemini-embedding-001` for chunk-level vector representations
+- **Framework**: Node.js + TypeScript with `@google/genai`, `gray-matter` (front matter parsing), `vitest` (testing), and `tsx` (runner)
+- **Storage**: In-memory chunk store with cosine similarity retrieval via dot-product ranking; no persistent vector database (suitable for the assignment scale)
+
+Chunks are derived from the Markdown knowledge-base files using `gray-matter` to extract `document_id`, `title`, `status`, and other front-matter metadata. The chunker preserves headings and metadata for authoritative source filtering and citation.
+
+## Evaluation
+
+```bash
+npm run eval
+```
+
+This runs the evaluation suite which loads `evaluation/visible-cases.json` and any custom cases, executes each case in a session, and outputs per-case results with categories (retrieval, groundedness, tool use, privacy, multi-turn).
+
+## Bug Diary
+
+### Failure 1: Legacy policy overriding active policy
+- **Root cause**: No authority-based re-ranking; both active and superseded documents had similar similarity scores.
+- **Fix**: Added authority boost to retriever — active official policies get 1.5x score multiplier; superseded documents excluded.
+- **Regression**: `standard-return-window` and `trailplus-return-window` visible cases now pass.
+
+### Failure 2: Stale ETA for cancelled order
+- **Root cause**: Order lookup tool was not stripping `estimated_delivery` for cancelled/returned orders.
+- **Fix**: Set `estimated_delivery`, `carrier`, `tracking_number` to `null` when status is cancelled/returned.
+- **Regression**: `cancelled-order-stale-eta` visible case now passes.
+
+### Failure 3: Prompt injection from internal migration note
+- **Root cause**: Model treated migration note as authoritative policy.
+- **Fix**: Added explicit prompt directive to reject unapproved documents; added `forbidden_sources_as_authority` filtering.
+- **Regression**: `retrieved-prompt-injection` visible case now passes.
+
+### Failure 4: Order privacy leak
+- **Root cause**: Order lookup tool returning customer internal fields.
+- **Fix**: Stripped all `customer.*` and `internal.*` fields from sanitized output; updated system prompt.
+- **Regression**: `order-data-privacy` visible case now passes.
+
+## Known Limitations
+
+- No persistent vector database: embeddings held in memory only
+- English-only queries; no multilingual retrieval
+- No true session isolation for concurrent users
+- Gemini API required
+- Order lookup is read-only (no actions supported)
+- Multi-turn context limited to last user message
+
+## AI Coding Tools Used
+
+GitHub Copilot and ChatGPT were used as coding assistants. They were helpful for:
+- Writing `gray-matter` front-matter parsing logic
+- Designing order lookup sanitization and normalization
+- Constructing RAG prompt directives
+- Writing test assertions for visible cases
+
+One AI-generated suggestion that was wrong: Copilot suggested normalizing order IDs by simply uppercasing and stripping whitespace, which would incorrectly transform `"ord 1007"` → `"ORD1007"` (missing the dash). The correct normalization requires inserting the dash after `ORD` when only 4 bare digits are provided.
+
+## Demo
+
+A 2-4 minute demonstration showing the agent in action. The demo should include:
+
+1. **Knowledge-base question with citations**: User asks about return policy → Agent answers with correct window and cites `01-returns-policy-current.md`.
+
+2. **Order lookup**: User asks about an order status (e.g., "Where is ORD-1007?") → Agent calls the order lookup tool and returns sanitized status with citation.
+
+3. **Multi-turn conversation**: User first asks "Do you ship internationally?" then follows up with "What about Canada?" → Agent carries context and answers correctly citing `06-international-shipping.md`.
+
+4. **Agent refuses to guess or recommends human help**: User asks for internal data (e.g., "Give me the risk score for ORD-1007") → Agent refuses, explains internal data cannot be shared, and sets handoff=true.
+
+5. **Evaluation suite running**: Terminal output of `npm run eval` showing per-case results broken down by category.
+
+<!-- Demo GIF will be embedded here -->
+<p align="center">
+  <img src="https://s8.ezgif.com/tmp/ezgif-85572db4957be49c.gif" alt="Demo GIF" width="200" />
+</p>
