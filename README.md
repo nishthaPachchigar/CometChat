@@ -215,8 +215,4 @@ Framework choice and quantity of code are not scoring criteria.
 
 Good luck. Build for reliability, not just for the happy-path demo.
 
-## Setup (duplicate - removed)
-
-```
-
 ```
